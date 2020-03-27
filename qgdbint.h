@@ -52,6 +52,10 @@ public:
 	void exit();
 	int setBreakpoint(int row);
 	int setBreakpoint(QString func, int* row = nullptr);
+	void delBreakpoint(int id);
+	void delAllBreakpoints();
+	void disableBreakpoint(int id);
+	void enableBreakpoint(int id);
 	void step();
 	void stepIn();
 	void stepOut();

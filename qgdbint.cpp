@@ -190,6 +190,22 @@ int QGdb::setBreakpoint(QString func, int* row) {
 	return loop.exec();
 }
 
+void QGdb::delBreakpoint(int id) {
+	manager->exec(QString("-break-delete %1").arg(id));
+}
+
+void QGdb::delAllBreakpoints() {
+	manager->exec(QString("-break-delete"));
+}
+
+void QGdb::disableBreakpoint(int id) {
+	manager->exec(QString("-break-disable %1").arg(id));
+}
+
+void QGdb::enableBreakpoint(int id) {
+	manager->exec(QString("-break-enable %1").arg(id));
+}
+
 void QGdb::step() {
 	manager->exec("-exec-next");
 }
