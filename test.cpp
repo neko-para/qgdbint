@@ -1,4 +1,5 @@
 #include "qgdbint.h"
+#include "record.h"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QTimer>
@@ -17,11 +18,29 @@ int main(int argc, char* argv[]) {
 				gdb->exit();
 			}
 		});
+		QObject::connect(gdb, &qgdbint::QGdb::positionUpdated, [](QString file, int row) {
+			qDebug() << "position changed to" << file << row;
+		});
+		QObject::connect(gdb, &qgdbint::QGdb::readyStdout, [](QString out) {
+			qDebug().nospace() << "@" << out;
+		});
 		QObject::connect(gdb, &qgdbint::QGdb::exited, &app, &QCoreApplication::quit);
 		gdb->start("/home/nekosu/test");
 		if (gdb->connect()) {
+			gdb->setBreakpoint("main");
 			gdb->cont();
+			gdb->waitUntilPause();
+			gdb->step();
+			gdb->cont();
+			gdb->waitUntilPause();
 		}
 	});
 	return app.exec();
 }
+
+/*
+int main() {
+	Record rec(R"(stopped,reason="breakpoint-hit",thread-id="1",stopped-threads="1",core="1")");
+	rec.result.dump();
+}
+*/

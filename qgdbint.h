@@ -1,5 +1,8 @@
+#pragma once
+
 #include <QProcess>
 #include <functional>
+#include "record.h"
 
 namespace qgdbint {
 
@@ -19,9 +22,9 @@ public slots:
 
 signals:
 	void Record(QStringList record);
-	void ReadyStdout(QString output);
-	void ReadyStderr(QString output);
-	void ErrorOccurred(QProcess::ProcessError err);
+	void readyStdout(QString output);
+	void readyStderr(QString output);
+	void errorOccurred(QProcess::ProcessError err);
 
 private slots:
 	void onReadyRead();
@@ -41,26 +44,31 @@ class QGdb : public QObject {
 public:
 	QGdb(QString gdbPath, QString gdbServerPath, int port = 12345, QObject* parent = nullptr);
 
-	void waitUntilPause();
+	QString waitUntilPause();
 
 	void start(QString program, QStringList arguments = QStringList(), QString input = "");
 	bool connect();
 	void cont();
 	void exit();
+	int setBreakpoint(int row);
+	int setBreakpoint(QString func, int* row = nullptr);
+	void step();
+	void stepIn();
+	void stepOut();
 
 signals:
 	void stateChanged(bool running, QString reason, QGdb* self);
 	void textResponse(QString text, QGdb* self);
 	void exited(QGdb* self);
+	void positionUpdated(QString file, int row, QGdb* self);
+	void readyStdout(QString output);
+	void readyStderr(QString output);
 
 private slots:
 	void onRecord(QStringList record);
 
 private:
 	static QStringList filter(QStringList record, QChar head);
-	static QString unescape(QString str, QString* rest = nullptr);
-	static QString pickResult(QString& row); // take the result before ',' and set row to the rest of it
-	static QMap<QString, QString> parseKeyStringPair(QString row);
 
 	QGdbProcessManager* manager;
 	QString gdb, gdbServer;

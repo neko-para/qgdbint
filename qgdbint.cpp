@@ -1,4 +1,5 @@
 #include "qgdbint.h"
+#include "record.h"
 #include <QRegularExpression>
 #include <QDebug>
 #include <QEventLoop>
@@ -22,7 +23,7 @@ void QGdbProcessManager::prepare(QString program, QStringList arguments,
 	connect(gdb, &QProcess::readyReadStandardOutput, this, &QGdbProcessManager::onReadyRead);
 	connect(gdbServer, &QProcess::readyReadStandardOutput, this, &QGdbProcessManager::onDispatchStdout);
 	connect(gdbServer, &QProcess::readyReadStandardError, this, &QGdbProcessManager::onDispatchStderr);
-	connect(gdb, SIGNAL(errorOccurred(QProcess::ProcessError)), this, SIGNAL(ErrorOccurred(QProcess::ProcessError)));
+	connect(gdb, SIGNAL(errorOccurred(QProcess::ProcessError)), this, SIGNAL(errorOccurred(QProcess::ProcessError)));
 	connect(gdb, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &QGdbProcessManager::onFinished);
 }
 
@@ -60,11 +61,11 @@ void QGdbProcessManager::onReadyRead() {
 }
 
 void QGdbProcessManager::onDispatchStdout() {
-	emit ReadyStdout(QString::fromUtf8(gdbServer->readAllStandardOutput()));
+	emit readyStdout(QString::fromUtf8(gdbServer->readAllStandardOutput()));
 }
 
 void QGdbProcessManager::onDispatchStderr() {
-	emit ReadyStdout(QString::fromUtf8(gdbServer->readAllStandardError()));
+	emit readyStderr(QString::fromUtf8(gdbServer->readAllStandardError()));
 }
 
 void QGdbProcessManager::onFinished() {
@@ -76,23 +77,53 @@ QGdb::QGdb(QString gdbPath, QString gdbServerPath, int port, QObject* parent)
 	: QObject(parent), gdb(gdbPath), gdbServer(gdbServerPath), port(port), state(true) {
 	manager = new QGdbProcessManager(this);
 	QObject::connect(manager, &QGdbProcessManager::Record, this, &QGdb::onRecord);
-	reqHandle = defHandle = [this](QStringList record) {
+	QObject::connect(manager, SIGNAL(readyStdout(QString)), this, SIGNAL(readyStdout(QString)));
+	QObject::connect(manager, SIGNAL(readyStderr(QString)), this, SIGNAL(readyStderr(QString)));
+	defHandle = [this](QStringList record) {
 		QString resp;
+		Const cst;
 		for (auto str : filter(record, '~')) {
-			resp += unescape(str);
+			cst.parse(str);
+			resp += cst.value;
 		}
 		emit textResponse(resp, this);
+		QStringList stateRecord = filter(record, '*');
+		if (stateRecord.size()) {
+			Record rec(stateRecord.back());
+			bool newState = rec.resultClass == "running";
+			if (newState != state) {
+				emit stateChanged(state = newState, rec.result.locate("reason")->str(), this); // when state is running, there is no `reason', thus set to ""
+				if (!newState) {
+					auto frame = rec.result.locate("frame");
+					QString file = frame->locate("fullname")->str();
+					if (file.size()) {
+						emit positionUpdated(file, frame->locate("line")->str().toInt(), this);
+					}
+				}
+			}
+		}
+		QStringList resultRecord = filter(record, '^');
+		for (auto record : resultRecord) {
+			Record rec(record);
+			if (rec.resultClass == "error") {
+				qDebug() << rec.result.locate("msg")->str();
+			}
+		}
 	};
 }
 
-void QGdb::waitUntilPause() {
+QString QGdb::waitUntilPause() {
 	QEventLoop loop(this);
-	QObject::connect(this, &QGdb::stateChanged, [&loop](bool running) {
+	QString reason;
+	auto connection = QObject::connect(this, &QGdb::stateChanged, [&loop, &reason](bool running, QString r) {
 		if (running == false) {
+			reason = r;
 			loop.quit();
 		}
 	});
 	loop.exec();
+	disconnect(connection);
+	return reason;
 }
 
 void QGdb::start(QString program, QStringList arguments, QString input) {
@@ -106,14 +137,9 @@ void QGdb::start(QString program, QStringList arguments, QString input) {
 bool QGdb::connect() {
 	manager->exec(QString("-target-select remote :%1").arg(port));
 	QEventLoop loop(this);
-	reqHandle = [this, &loop](QStringList record) {
-		QString row = filter(record, '^').first();
-		QString result = pickResult(row);
-		if (result == "error") {
-			qDebug() << parseKeyStringPair(row)["msg"];
-		}
-		defHandle(record);
-		loop.exit(result == "connected");
+	reqHandle = [&loop](QStringList record) {
+		Record rec(filter(record, '^').first());
+		loop.exit(rec.resultClass == "connected");
 	};
 	return loop.exec();
 }
@@ -125,31 +151,65 @@ void QGdb::cont() {
 void QGdb::exit() {
 	manager->exec("-gdb-exit");
 	QEventLoop loop(this);
-	reqHandle = [this, &loop](QStringList record) {
-		QString row = filter(record, '^').first();
-		QString result = pickResult(row);
-		if (result != "exit") {
-			qDebug() << result;
-		} else {
-			emit exited(this);
-		}
-		loop.exit(0);
+	reqHandle = [this, &loop](QStringList) {
+		emit exited(this);
+		loop.exit();
 	};
 	loop.exec();
 }
 
-void QGdb::onRecord(QStringList record) {
-	QStringList rec = filter(record, '*');
-	if (rec.size()) {
-		QString row = rec.back();
-		QString curState = pickResult(row);
-		bool newState = curState == "running";
-		if (newState != state) {
-			emit stateChanged(state = newState, parseKeyStringPair(row)["reason"], this); // when state is running, there is no `reason', thus set to ""
+int QGdb::setBreakpoint(int row) {
+	manager->exec(QString("-break-insert -f %1").arg(row));
+	QEventLoop loop(this);
+	reqHandle = [&loop](QStringList record) {
+		Record rec(filter(record, '^').first());
+		if (rec.resultClass == "error") {
+			loop.exit(-1);
+		} else {
+			loop.exit(rec.result.locate("bkpt")->locate("number")->str().toInt());
 		}
+	};
+	return loop.exec();
+}
+
+int QGdb::setBreakpoint(QString func, int* row) {
+	manager->exec(QString("-break-insert -f %1").arg(func));
+	QEventLoop loop(this);
+	reqHandle = [&loop, row](QStringList record) {
+		Record rec(filter(record, '^').first());
+		if (rec.resultClass == "error") {
+			loop.exit(-1);
+		} else {
+			auto bkpt = rec.result.locate("bkpt")->as<Tuple>();
+			if (row) {
+				*row = bkpt->locate("line")->str().toInt();
+			}
+			loop.exit(bkpt->locate("number")->str().toInt());
+		}
+	};
+	return loop.exec();
+}
+
+void QGdb::step() {
+	manager->exec("-exec-next");
+}
+
+void QGdb::stepIn() {
+	manager->exec("-exec-step");
+}
+
+void QGdb::stepOut() {
+	manager->exec("-exec-finish");
+}
+
+void QGdb::onRecord(QStringList record) {
+	defHandle(record);
+	if (reqHandle) {
+		reqHandle(record);
+		decltype(reqHandle) empty;
+		reqHandle.swap(empty);
 	}
-	reqHandle(record);
-	reqHandle = defHandle;
+
 }
 
 QStringList QGdb::filter(QStringList record, QChar head) {
@@ -160,102 +220,6 @@ QStringList QGdb::filter(QStringList record, QChar head) {
 		}
 	}
 	return result;
-}
-QString QGdb::unescape(QString str, QString* rest) {
-	QByteArray s;
-	int ptr = 1;
-	for (; ptr < str.size(); ) {
-		switch (str[ptr].unicode()) {
-		case '\\':
-			++ptr;
-			switch (str[ptr].unicode()) {
-#define _CASE_(c, tc) \
-			case c: \
-				s.push_back(tc); \
-				++ptr; \
-				break;
-			_CASE_('\\', '\\')
-			_CASE_('a', '\a')
-			_CASE_('b', '\b')
-			_CASE_('f', '\f')
-			_CASE_('n', '\n')
-			_CASE_('r', '\r')
-			_CASE_('t', '\t')
-			_CASE_('\'', '\'')
-			_CASE_('"', '"')
-#undef _CASE_
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7': { // \0 & \ddd
-				int l = 0;
-				int real = 0;
-				while (l < 3 && unsigned(str[ptr + l].unicode() - '0') < 8) {
-					real <<= 3;
-					real |= str[ptr + l].unicode() - '0';
-					++l;
-				}
-				s.push_back(real);
-				ptr += l;
-				break;
-			}
-			case 'x':{ // \xdd
-				int l = 1;
-				int real = 0;
-				while (l < 3 && isxdigit(str[ptr + l].unicode())) {
-					real <<= 4;
-					int cd = str[ptr + l].unicode();
-					real |= (isdigit(cd) ? cd - '0' : tolower(cd) - 'a' + 10);
-					++l;
-				}
-				s.push_back(real);
-				ptr += l;
-				break;
-			}
-			default:
-				;
-			}
-			break;
-		case '"':
-			if (rest) {
-				*rest = str.mid(ptr + 1);
-			}
-			return QString::fromUtf8(s);
-		default:
-			s.push_back(str[ptr++].unicode());
-		}
-	}
-	qDebug() << "error unescaping:" << str;
-	return "";
-}
-
-QString QGdb::pickResult(QString &row) {
-	int pos = row.indexOf(',');
-	QString result = row.left(pos == -1 ? row.length() : pos);
-	if (pos != -1) {
-		row = row.mid(pos + 1);
-	} else {
-		row = "";
-	}
-	return result;
-}
-
-QMap<QString, QString> QGdb::parseKeyStringPair(QString row) {
-	QMap<QString, QString> value;
-	while (row.size()) {
-		int pos = row.indexOf("=");
-		if (pos == -1) {
-			break;
-		}
-		QString rest;
-		value[row.left(pos)] = unescape(row.mid(pos + 1), &rest);
-		row = rest;
-	}
-	return value;
 }
 
 }
