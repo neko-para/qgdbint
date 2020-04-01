@@ -74,7 +74,7 @@ void QGdbProcessManager::onFinished() {
 }
 
 QGdb::QGdb(QString gdbPath, QString gdbServerPath, int port, QObject* parent)
-	: QObject(parent), gdb(gdbPath), gdbServer(gdbServerPath), port(port), state(true) {
+	: QObject(parent), gdb(gdbPath), gdbServer(gdbServerPath), port(port) {
 	manager = new QGdbProcessManager(this);
 	QObject::connect(manager, &QGdbProcessManager::Record, this, &QGdb::onRecord);
 	QObject::connect(manager, SIGNAL(readyStdout(QString)), this, SIGNAL(readyStdout(QString)));
@@ -132,6 +132,7 @@ void QGdb::start(QString program, QStringList arguments, QString input) {
 	QEventLoop loop(this);
 	QObject::connect(manager, &QGdbProcessManager::Record, &loop, &QEventLoop::quit);
 	loop.exec(); // skip the first part.
+	state = false;
 }
 
 bool QGdb::connect() {
@@ -216,6 +217,10 @@ void QGdb::stepIn() {
 
 void QGdb::stepOut() {
 	manager->exec("-exec-finish");
+}
+
+void QGdb::terminate() {
+	manager->terminate();
 }
 
 void QGdb::onRecord(QStringList record) {

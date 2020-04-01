@@ -7,5 +7,5 @@ set(CMAKE_AUTOMOC ON)
 add_library(qgdbint STATIC "qgdbint.h" "record.h" "qgdbint.cpp" "record.cpp")
 target_link_libraries(qgdbint PRIVATE Qt5::Core)
 
-add_executable(qgdbintTest "test.cpp")
-target_link_libraries(qgdbintTest PRIVATE Qt5::Core qgdbint)
+# add_executable(qgdbintTest "test.cpp")
+# target_link_libraries(qgdbintTest PRIVATE Qt5::Core qgdbint)

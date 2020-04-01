@@ -59,6 +59,7 @@ public:
 	void step();
 	void stepIn();
 	void stepOut();
+	void terminate();
 
 signals:
 	void stateChanged(bool running, QString reason, QGdb* self);
