@@ -46,7 +46,7 @@ public:
 
 	QString waitUntilPause();
 
-	bool start(QString program, QStringList arguments = QStringList(), QString input = "");
+	void start(QString program, QStringList arguments = QStringList(), QString input = "");
 	void cont();
 	void exit();
 	int setBreakpoint(int row);
@@ -67,6 +67,7 @@ signals:
 	void positionUpdated(QString file, int row, QGdb* self);
 	void readyStdout(QString output);
 	void readyStderr(QString output);
+	void errorOccurered(QString message);
 
 private slots:
 	void onRecord(QStringList record);

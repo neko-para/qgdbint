@@ -1,7 +1,5 @@
 #include "qgdbint.h"
 #include "record.h"
-#include <QRegularExpression>
-#include <QDebug>
 #include <QEventLoop>
 
 namespace qgdbint {
@@ -106,7 +104,7 @@ QGdb::QGdb(QString gdbPath, QString gdbServerPath, int port, QObject* parent)
 		for (auto record : resultRecord) {
 			Record rec(record);
 			if (rec.resultClass == "error") {
-				qDebug() << rec.result.locate("msg")->str();
+				emit errorOccurered(rec.result.locate("msg")->str());
 			}
 		}
 	};
@@ -126,24 +124,7 @@ QString QGdb::waitUntilPause() {
 	return reason;
 }
 
-static QString escapePath(QString str) { // we assume the path is not SO strange
-	QString s;
-	for (auto ch : str) {
-		switch (ch.unicode()) {
-		case '"':
-			s += "\\\"";
-			break;
-		case '\\':
-			s += "\\\\";
-			break;
-		default:
-			s += ch;
-		}
-	}
-	return s;
-}
-
-bool QGdb::start(QString program, QStringList arguments, QString input) {
+void QGdb::start(QString program, QStringList arguments, QString input) {
 	manager->prepare(program, arguments, gdb, gdbServer, port);
 	manager->run(input);
 	QEventLoop loop(this);
@@ -151,19 +132,7 @@ bool QGdb::start(QString program, QStringList arguments, QString input) {
 	loop.exec(); // skip the first part.
 	state = false;
 	manager->exec(QString("-target-select remote :%1").arg(port));
-	reqHandle = [&loop](QStringList record) {
-		Record rec(filter(record, '^').first());
-		loop.exit(rec.resultClass == "connected");
-	};
-	if (!loop.exec()) {
-		return false;
-	}
-	reqHandle = [&loop](QStringList record) {
-		Record rec(filter(record, '^').first());
-		loop.exit(rec.resultClass == "done");
-	};
-	manager->exec(QString("-file-exec-and-symbols \"%1\"").arg(escapePath(program)));
-	return true;
+	manager->exec(QString("-file-exec-and-symbols \"%1\"").arg(program.replace('\\', "\\\\").replace('"', "\\\"")));
 }
 
 void QGdb::cont() {
@@ -251,7 +220,6 @@ void QGdb::onRecord(QStringList record) {
 		decltype(reqHandle) empty;
 		reqHandle.swap(empty);
 	}
-
 }
 
 QStringList QGdb::filter(QStringList record, QChar head) {
