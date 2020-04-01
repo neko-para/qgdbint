@@ -46,8 +46,7 @@ public:
 
 	QString waitUntilPause();
 
-	void start(QString program, QStringList arguments = QStringList(), QString input = "");
-	bool connect();
+	bool start(QString program, QStringList arguments = QStringList(), QString input = "");
 	void cont();
 	void exit();
 	int setBreakpoint(int row);

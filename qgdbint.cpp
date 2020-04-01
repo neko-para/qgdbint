@@ -17,7 +17,7 @@ void QGdbProcessManager::prepare(QString program, QStringList arguments,
 	gdb = new QProcess(this);
 	gdb->setProgram(gdbPath);
 
-	gdbServer->setArguments(QStringList() << QString(":%1").arg(port) << program << arguments);
+	gdbServer->setArguments(QStringList() << "--once" << QString(":%1").arg(port) << program << arguments);
 	gdb->setArguments({ "-i=mi" });
 
 	connect(gdb, &QProcess::readyReadStandardOutput, this, &QGdbProcessManager::onReadyRead);
@@ -126,23 +126,44 @@ QString QGdb::waitUntilPause() {
 	return reason;
 }
 
-void QGdb::start(QString program, QStringList arguments, QString input) {
+static QString escapePath(QString str) { // we assume the path is not SO strange
+	QString s;
+	for (auto ch : str) {
+		switch (ch.unicode()) {
+		case '"':
+			s += "\\\"";
+			break;
+		case '\\':
+			s += "\\\\";
+			break;
+		default:
+			s += ch;
+		}
+	}
+	return s;
+}
+
+bool QGdb::start(QString program, QStringList arguments, QString input) {
 	manager->prepare(program, arguments, gdb, gdbServer, port);
 	manager->run(input);
 	QEventLoop loop(this);
 	QObject::connect(manager, &QGdbProcessManager::Record, &loop, &QEventLoop::quit);
 	loop.exec(); // skip the first part.
 	state = false;
-}
-
-bool QGdb::connect() {
 	manager->exec(QString("-target-select remote :%1").arg(port));
-	QEventLoop loop(this);
 	reqHandle = [&loop](QStringList record) {
 		Record rec(filter(record, '^').first());
 		loop.exit(rec.resultClass == "connected");
 	};
-	return loop.exec();
+	if (!loop.exec()) {
+		return false;
+	}
+	reqHandle = [&loop](QStringList record) {
+		Record rec(filter(record, '^').first());
+		loop.exit(rec.resultClass == "done");
+	};
+	manager->exec(QString("-file-exec-and-symbols \"%1\"").arg(escapePath(program)));
+	return true;
 }
 
 void QGdb::cont() {
