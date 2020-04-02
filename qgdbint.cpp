@@ -15,6 +15,9 @@ void QGdbProcessManager::prepare(QString program, QStringList arguments,
 	gdb = new QProcess(this);
 	gdb->setProgram(gdbPath);
 
+	for (auto& arg : arguments) {
+		arg = arg.replace('\\', "\\\\").replace('\"', "\\\"").replace(' ', "\\ ");
+	}
 	gdbServer->setArguments(QStringList() << "--once" << QString(":%1").arg(port) << program << arguments);
 	gdb->setArguments({ "-i=mi" });
 
