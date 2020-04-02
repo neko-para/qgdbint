@@ -15,10 +15,11 @@ void QGdbProcessManager::prepare(QString program, QStringList arguments,
 	gdb = new QProcess(this);
 	gdb->setProgram(gdbPath);
 
-	for (auto& arg : arguments) {
-		arg = arg.replace('\\', "\\\\").replace('\"', "\\\"").replace(' ', "\\ ");
-	}
-	gdbServer->setArguments(QStringList() << "--once" << QString(":%1").arg(port) << program << arguments);
+	// TODO: findout what cause the problem: GDB Version or System
+#ifdef Q_OS_WIN32
+	arguments.push_front(program);
+#endif
+	gdbServer->setArguments(QStringList() << "--no-startup-with-shell" << "--once" << QString(":%1").arg(port) << program << arguments);
 	gdb->setArguments({ "-i=mi" });
 
 	connect(gdb, &QProcess::readyReadStandardOutput, this, &QGdbProcessManager::onReadyRead);
