@@ -54,7 +54,7 @@ void QGdbProcessManager::onReadyRead() {
 	if (pos != -1) {
 		QString data = QString::fromUtf8(buffer.left(pos));
 		buffer = buffer.mid(pos + 6);
-		emit Record(data.split('\n', Qt::SkipEmptyParts));
+		emit Record(data.split('\n', QString::SkipEmptyParts));
 	}
 }
 
@@ -68,7 +68,7 @@ void QGdbProcessManager::onDispatchStderr() {
 
 void QGdbProcessManager::onFinished() {
 	buffer += gdb->readAllStandardOutput();
-	emit Record(QString::fromUtf8(buffer).split('\n', Qt::SkipEmptyParts));
+	emit Record(QString::fromUtf8(buffer).split('\n', QString::SkipEmptyParts));
 }
 
 QGdb::QGdb(QString gdbPath, QString gdbServerPath, int port, QObject* parent)
