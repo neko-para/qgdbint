@@ -35,11 +35,9 @@ void QGdbProcessManager::clear() {
 	delete gdbServer;
 }
 
-void QGdbProcessManager::run(QString input) {
+void QGdbProcessManager::run() {
 	buffer.clear();
 	gdbServer->start();
-	gdbServer->write(input.toUtf8());
-	gdbServer->closeWriteChannel();
 	gdb->start();
 }
 
@@ -52,13 +50,21 @@ void QGdbProcessManager::terminate() {
 	gdbServer->kill();
 }
 
+void QGdbProcessManager::input(QString buffer) {
+	gdbServer->write(buffer.toUtf8());
+}
+
+void QGdbProcessManager::inputFin() {
+	gdbServer->closeWriteChannel();
+}
+
 void QGdbProcessManager::onReadyRead() {
 	buffer += gdb->readAllStandardOutput();
 	int pos = buffer.indexOf("(gdb) \n");
 	if (pos != -1) {
 		QString data = QString::fromUtf8(buffer.left(pos));
 		buffer = buffer.mid(pos + 6);
-		emit Record(data.split('\n', QString::SkipEmptyParts));
+		emit Record(data.split('\n', Qt::SkipEmptyParts));
 	}
 }
 
@@ -72,7 +78,7 @@ void QGdbProcessManager::onDispatchStderr() {
 
 void QGdbProcessManager::onFinished() {
 	buffer += gdb->readAllStandardOutput();
-	emit Record(QString::fromUtf8(buffer).split('\n', QString::SkipEmptyParts));
+	emit Record(QString::fromUtf8(buffer).split('\n', Qt::SkipEmptyParts));
 }
 
 QGdb::QGdb(QString gdbPath, QString gdbServerPath, int port, QObject* parent)
@@ -128,9 +134,20 @@ QString QGdb::waitUntilPause() {
 	return reason;
 }
 
-void QGdb::start(QString program, QStringList arguments, QString input) {
+void QGdb::input(QString buffer, bool finish) {
+	manager->input(buffer);
+	if (finish) {
+		finishInput();
+	}
+}
+
+void QGdb::finishInput() {
+	manager->inputFin();
+}
+
+void QGdb::start(QString program, QStringList arguments) {
 	manager->prepare(program, arguments, gdb, gdbServer, port);
-	manager->run(input);
+	manager->run();
 	QEventLoop loop(this);
 	QObject::connect(manager, &QGdbProcessManager::Record, &loop, &QEventLoop::quit);
 	loop.exec(); // skip the first part.

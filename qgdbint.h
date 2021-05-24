@@ -16,9 +16,11 @@ public:
 	void clear();
 
 public slots:
-	void run(QString input); // havn't select-target
+	void run(); // havn't select-target
 	void exec(QString cmd); // no '\n' needed
 	void terminate();
+	void input(QString buffer);
+	void inputFin();
 
 signals:
 	void Record(QStringList record);
@@ -46,7 +48,10 @@ public:
 
 	QString waitUntilPause();
 
-	void start(QString program, QStringList arguments = QStringList(), QString input = "");
+	void input(QString buffer, bool finish = false);
+	void finishInput();
+
+	void start(QString program, QStringList arguments = QStringList());
 	void cont();
 	void exit();
 	int setBreakpoint(int row);
