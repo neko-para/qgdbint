@@ -25,15 +25,13 @@ int main(int argc, char* argv[]) {
 			qDebug().nospace() << "@" << out;
 		});
 		QObject::connect(gdb, &qgdbint::QGdb::exited, &app, &QCoreApplication::quit);
-		gdb->start("/home/nekosu/test");
-		if (gdb->connect()) {
-			gdb->setBreakpoint("main");
-			gdb->cont();
-			gdb->waitUntilPause();
-			gdb->step();
-			gdb->cont();
-			gdb->waitUntilPause();
-		}
+		gdb->start("./testProgram");
+		gdb->setBreakpoint("main");
+		gdb->cont();
+		gdb->waitUntilPause();
+		gdb->step();
+		gdb->cont();
+		gdb->waitUntilPause();
 	});
 	return app.exec();
 }
