@@ -63,6 +63,7 @@ public:
 	void step();
 	void stepIn();
 	void stepOut();
+	QString eval(QString expr);
 	void terminate();
 
 signals:

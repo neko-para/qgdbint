@@ -230,6 +230,25 @@ void QGdb::stepOut() {
 	manager->exec("-exec-finish");
 }
 
+QString QGdb::eval(QString expr) {
+	QString result;
+	manager->exec(QString("-data-evaluate-expression %1").arg(expr));
+	QEventLoop loop(this);
+	reqHandle = [&loop, &result](QStringList record) {
+		Record rec(filter(record, '^').first());
+		rec.result.dump();
+		if (rec.resultClass == "error") {
+			loop.exit(-1);
+		} else {
+			auto val = rec.result.locate("value")->as<Const>();
+			result = val->str();
+			loop.exit(0);
+		}
+	};
+	loop.exec();
+	return result;
+}
+
 void QGdb::terminate() {
 	manager->terminate();
 }
