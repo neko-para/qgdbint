@@ -27,15 +27,12 @@ int main(int argc, char* argv[]) {
 		QObject::connect(gdb, &qgdbint::QGdb::exited, &app, &QCoreApplication::quit);
 		gdb->start("./testProgram");
 		gdb->setBreakpoint("main");
+		gdb->autoWaitAsync();
 		gdb->cont();
-		gdb->waitUntilPause();
 		gdb->step();
-		gdb->waitUntilPause();
 		gdb->step();
-		gdb->waitUntilPause();
 		qDebug() << "buf=" << gdb->eval("buf");
 		gdb->cont();
-		gdb->waitUntilPause();
 		app.exit(0);
 	});
 	return app.exec();

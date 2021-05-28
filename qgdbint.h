@@ -39,7 +39,6 @@ private:
 	QProcess* gdbServer;
 	QByteArray buffer;
 };
-
 class QGdb : public QObject {
 	Q_OBJECT
 
@@ -52,18 +51,27 @@ public:
 	void finishInput();
 
 	void start(QString program, QStringList arguments = QStringList());
-	void cont();
+
+	// sync
 	void exit();
 	int setBreakpoint(int row);
 	int setBreakpoint(QString func, int* row = nullptr);
-	void delBreakpoint(int id);
-	void delAllBreakpoints();
-	void disableBreakpoint(int id);
-	void enableBreakpoint(int id);
-	void step();
-	void stepIn();
-	void stepOut();
 	QString eval(QString expr);
+
+	// async
+	QString cont();
+	QString delBreakpoint(int id);
+	QString delAllBreakpoints();
+	QString disableBreakpoint(int id);
+	QString enableBreakpoint(int id);
+	QString breakAfter(int id, int cnt);
+	QString breakCondition(int id, QString cond);
+	QString step();
+	QString stepIn();
+	QString stepOut();
+	
+	void autoWaitAsync(bool wait = true);
+
 	void terminate();
 
 signals:
@@ -86,6 +94,7 @@ private:
 	int port;
 	bool state; // whether running
 	std::function<void(QStringList)> reqHandle, defHandle;
+	bool wait;
 };
 
 }

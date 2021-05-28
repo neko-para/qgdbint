@@ -13,5 +13,5 @@ class ```QGdb``` provide a simple interface to do some high-level action.
 * Full low level IO and record parsing
 * Run and continue
 * Step, step in and step out
-* Add and delete breakpoints
+* Add and delete breakpoints, customize breakpoints (e.g. countdown, condition)
 * Evaluate expressions

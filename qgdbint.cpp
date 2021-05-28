@@ -82,7 +82,7 @@ void QGdbProcessManager::onFinished() {
 }
 
 QGdb::QGdb(QString gdbPath, QString gdbServerPath, int port, QObject* parent)
-	: QObject(parent), gdb(gdbPath), gdbServer(gdbServerPath), port(port) {
+	: QObject(parent), gdb(gdbPath), gdbServer(gdbServerPath), port(port), wait(false) {
 	manager = new QGdbProcessManager(this);
 	QObject::connect(manager, &QGdbProcessManager::Record, this, &QGdb::onRecord);
 	QObject::connect(manager, SIGNAL(readyStdout(QString)), this, SIGNAL(readyStdout(QString)));
@@ -156,10 +156,6 @@ void QGdb::start(QString program, QStringList arguments) {
 	manager->exec(QString("-file-exec-and-symbols \"%1\"").arg(program.replace('\\', "\\\\").replace('"', "\\\"")));
 }
 
-void QGdb::cont() {
-	manager->exec("-exec-continue");
-}
-
 void QGdb::exit() {
 	manager->exec("-gdb-exit");
 	QEventLoop loop(this);
@@ -202,34 +198,6 @@ int QGdb::setBreakpoint(QString func, int* row) {
 	return loop.exec();
 }
 
-void QGdb::delBreakpoint(int id) {
-	manager->exec(QString("-break-delete %1").arg(id));
-}
-
-void QGdb::delAllBreakpoints() {
-	manager->exec(QString("-break-delete"));
-}
-
-void QGdb::disableBreakpoint(int id) {
-	manager->exec(QString("-break-disable %1").arg(id));
-}
-
-void QGdb::enableBreakpoint(int id) {
-	manager->exec(QString("-break-enable %1").arg(id));
-}
-
-void QGdb::step() {
-	manager->exec("-exec-next");
-}
-
-void QGdb::stepIn() {
-	manager->exec("-exec-step");
-}
-
-void QGdb::stepOut() {
-	manager->exec("-exec-finish");
-}
-
 QString QGdb::eval(QString expr) {
 	QString result;
 	manager->exec(QString("-data-evaluate-expression %1").arg(expr));
@@ -247,6 +215,100 @@ QString QGdb::eval(QString expr) {
 	};
 	loop.exec();
 	return result;
+}
+
+QString QGdb::cont() {
+	manager->exec("-exec-continue");
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::delBreakpoint(int id) {
+	manager->exec(QString("-break-delete %1").arg(id));
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::delAllBreakpoints() {
+	manager->exec(QString("-break-delete"));
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::disableBreakpoint(int id) {
+	manager->exec(QString("-break-disable %1").arg(id));
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::enableBreakpoint(int id) {
+	manager->exec(QString("-break-enable %1").arg(id));
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::breakAfter(int id, int cnt) {
+	manager->exec(QString("-break-after %1 %2").arg(id).arg(cnt));
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::breakCondition(int id, QString cond) {
+	manager->exec(QString("-break-condition %1 %2").arg(id).arg(cond));
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::step() {
+	manager->exec("-exec-next");
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::stepIn() {
+	manager->exec("-exec-step");
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+QString QGdb::stepOut() {
+	manager->exec("-exec-finish");
+	if (wait) {
+		return waitUntilPause();
+	} else {
+		return QString();
+	}
+}
+
+void QGdb::autoWaitAsync(bool w) {
+	wait = w;
 }
 
 void QGdb::terminate() {
